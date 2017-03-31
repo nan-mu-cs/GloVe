@@ -1,23 +1,26 @@
-import tensorflow as tf
+import numpy as np
 import collections
+import argparse
 import os
 import sys
 import json
 
-flags = tf.app.flag
+parser = argparse.ArgumentParser()
 
-flags.DEFINE_string("save_path", None, "Directory to write cleaned data")
-flags.DEFINE_string("data_file", None, "File of data to be cleaned")
-flags.DEFINE_integer("window_size", 5,
-                     "The number of words to predict to the left and right "
-                     "of the target word.")
-lags.DEFINE_integer("min_count", 5,
-                    "The minimum number of word occurrences for it to be "
-                    "included in the vocabulary.")
-flags.DEFINE_float("subsample", 1e-3,
-                   "Subsample threshold for word occurrence. Words that appear "
-                   "with higher frequency will be randomly down-sampled. Set "
-                   "to 0 to disable.")
+parser.add_argument("--save_path", type=str, default=None, help="Directory to write cleaned data")
+parser.add_argument("--data_file", type=str, default=None, help="File of data to be cleaned")
+parser.add_argument("--window_size", type=int, default=5,
+                    help="The number of words to predict to the left and right "
+                         "of the target word.")
+parser.add_argument("--min_count", type=int, default=5,
+                    help="The minimum number of word occurrences for it to be "
+                         "included in the vocabulary.")
+parser.add_argument("--subsample", type=float, default=1e-3,
+                    help="Subsample threshold for word occurrence. Words that appear "
+                         "with higher frequency will be randomly down-sampled. Set "
+                         "to 0 to disable.")
+args = parser.parse_args()
+print args
 
 
 class CleanData(object):
@@ -26,6 +29,8 @@ class CleanData(object):
         self._data_file = options.data_file
         self._min_count = options.min_count
         self._subsample = options.subsample
+        self._vocab_size = 0
+        self._window_size = options.window_size
         self.dictionary = dict()
         self.reverse_dictionary = dict()
 
@@ -34,19 +39,21 @@ class CleanData(object):
             sys.exit(1)
 
     def read_data(self):
-        with open(self._data_file) as f:
+        with open(self._data_file, "r") as f:
             data = f.read().split()
             print("data file contains %d words" % len(data))
         return data
 
     def build_dataset(self):
         data = collections.Counter(self.read_data()).most_common()
-        endIndex = 0
-        for index, item in reversed(data):
+        end_index = 0
+        for index, item in enumerate(reversed(data)):
             if item[1] >= self._min_count:
-                endIndex = index
+                end_index = index
                 break
-        data = data[0:endIndex]
+        data = data[0:-end_index]
+        self._vocab_size = len(data)
+        print("vocab size is %d." % self._vocab_size)
 
         for word, _ in data:
             self.dictionary[word] = len(self.dictionary)
@@ -57,6 +64,43 @@ class CleanData(object):
             print("Write vocab into %s." % os.path.join(self._save_path, "vocab.txt"))
         return data
 
+    def update_coocur_line(self, line):
+        window = self._window_size
+        result = []
+        line = line.split()
+        for index, word in enumerate(line):
+            if self.dictionary.has_key(word):
+                target_index = self.dictionary[word]
+            else:
+                continue
+            for i in range(max(0, index - window), min(len(line), index + window)):
+                if self.dictionary.has_key(line[i]):
+                    context_index = self.dictionary[line[i]]
+                    result.append((target_index, context_index))
+                else:
+                    continue
+        return result
+
+    def build_cooccur(self):
+        line_number = 0
+        with open(self._data_file, "r") as f:
+            cooccur_matrix = np.zeros(shape=[self._vocab_size, self._vocab_size], dtype=np.uint32)
+            line = self.update_coocur_line(f.readline())
+            for target_word, context_word in line:
+                cooccur_matrix[target_word][context_word] += 1
+            if line_number + 1 % 1000 == 0:
+                print("Processed %d lines" % (line_number + 1))
+            line_number += 1
+            print("Finish processed files")
+            with open(os.path.join(self._save_path, "cooccur_matrix.npy"), "w") as output:
+                np.save(output, cooccur_matrix)
+                print("Save cooccur matrix into %s" % (os.path.join(self._save_path, "cooccur_matrix.npy")))
+
+    def clean(self):
+        self.build_dataset()
+        self.build_cooccur()
+
 
 if __name__ == "__main__":
-    clean_data = CleanData(flags.FLAGS)
+    clean_data = CleanData(args)
+    clean_data.clean()
