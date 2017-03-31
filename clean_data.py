@@ -26,6 +26,8 @@ class CleanData(object):
         self._data_file = options.data_file
         self._min_count = options.min_count
         self._subsample = options.subsample
+        self.dictionary = dict()
+        self.reverse_dictionary = dict()
 
         if not self._data_file or not self._save_path:
             print("--save_path and --data_file must be specified.")
@@ -45,6 +47,11 @@ class CleanData(object):
                 endIndex = index
                 break
         data = data[0:endIndex]
+
+        for word, _ in data:
+            self.dictionary[word] = len(self.dictionary)
+        self.reverse_dictionary = dict(zip(self.dictionary.values(), self.dictionary.keys()))
+
         with open(os.path.join(self._save_path, "vocab.txt"), "w") as f:
             f.write(json.dumps(data))
             print("Write vocab into %s." % os.path.join(self._save_path, "vocab.txt"))
