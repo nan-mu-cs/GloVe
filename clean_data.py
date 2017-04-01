@@ -96,7 +96,7 @@ class CleanData(object):
                         cooccur_matrix[key] += 1
                     else:
                         cooccur_matrix[key] = 1
-                if line_number + 1 % 1000 == 0:
+                if (line_number + 1) % 1000 == 0:
                     print("Processed %d lines" % (line_number + 1))
                 line_number += 1
 
