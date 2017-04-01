@@ -69,12 +69,12 @@ class CleanData(object):
         result = []
         line = line.split()
         for index, word in enumerate(line):
-            if self.dictionary.has_key(word):
+            if word in self.dictionary:
                 target_index = self.dictionary[word]
             else:
                 continue
             for i in range(max(0, index - window), min(len(line), index + window)):
-                if self.dictionary.has_key(line[i]):
+                if line[i] in self.dictionary:
                     context_index = self.dictionary[line[i]]
                     result.append((target_index, context_index))
                 else:
@@ -84,16 +84,26 @@ class CleanData(object):
     def build_cooccur(self):
         line_number = 0
         with open(self._data_file, "r") as f:
-            cooccur_matrix = np.zeros(shape=[self._vocab_size, self._vocab_size], dtype=np.uint32)
+            cooccur_matrix = dict()
             line = self.update_coocur_line(f.readline())
             for target_word, context_word in line:
-                cooccur_matrix[target_word][context_word] += 1
+                key = str(target_word) + "-" + str(context_word)
+                if key in cooccur_matrix:
+                    cooccur_matrix[key] += 1
+                else:
+                    cooccur_matrix[key] = 1
             if line_number + 1 % 1000 == 0:
                 print("Processed %d lines" % (line_number + 1))
             line_number += 1
             print("Finish processed files")
             with open(os.path.join(self._save_path, "cooccur_matrix.npy"), "w") as output:
                 np.save(output, cooccur_matrix)
+                for i in range(0, self._vocab_size):
+                    for j in range(0, self._vocab_size):
+                        key = str(i) + "-" + str(j)
+                        if key in cooccur_matrix:
+                            f.write("%d %d %d\n" % (i, j, cooccur_matrix[key]))
+
                 print("Save cooccur matrix into %s" % (os.path.join(self._save_path, "cooccur_matrix.npy")))
 
     def clean(self):
