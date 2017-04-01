@@ -83,28 +83,33 @@ class CleanData(object):
 
     def build_cooccur(self):
         line_number = 0
+        cooccur_matrix = dict()
         with open(self._data_file, "r") as f:
-            cooccur_matrix = dict()
-            line = self.update_coocur_line(f.readline())
-            for target_word, context_word in line:
-                key = str(target_word) + "-" + str(context_word)
-                if key in cooccur_matrix:
-                    cooccur_matrix[key] += 1
-                else:
-                    cooccur_matrix[key] = 1
-            if line_number + 1 % 1000 == 0:
-                print("Processed %d lines" % (line_number + 1))
-            line_number += 1
-            print("Finish processed files")
-            with open(os.path.join(self._save_path, "cooccur_matrix.npy"), "w") as output:
-                np.save(output, cooccur_matrix)
-                for i in range(0, self._vocab_size):
-                    for j in range(0, self._vocab_size):
-                        key = str(i) + "-" + str(j)
-                        if key in cooccur_matrix:
-                            f.write("%d %d %d\n" % (i, j, cooccur_matrix[key]))
+            while True:
+                line = f.readline()
+                if not line:
+                    break
+                line = self.update_coocur_line(line)
+                for target_word, context_word in line:
+                    key = str(target_word) + "-" + str(context_word)
+                    if key in cooccur_matrix:
+                        cooccur_matrix[key] += 1
+                    else:
+                        cooccur_matrix[key] = 1
+                if line_number + 1 % 1000 == 0:
+                    print("Processed %d lines" % (line_number + 1))
+                line_number += 1
 
-                print("Save cooccur matrix into %s" % (os.path.join(self._save_path, "cooccur_matrix.npy")))
+        print("Finish processed files")
+        with open(os.path.join(self._save_path, "cooccur_matrix.npy"), "w") as output:
+            np.save(output, cooccur_matrix)
+            for i in range(0, self._vocab_size):
+                for j in range(0, self._vocab_size):
+                    key = str(i) + "-" + str(j)
+                    if key in cooccur_matrix:
+                        f.write("%d %d %d\n" % (i, j, cooccur_matrix[key]))
+
+            print("Save cooccur matrix into %s" % (os.path.join(self._save_path, "cooccur_matrix.npy")))
 
     def clean(self):
         self.build_dataset()
