@@ -27,7 +27,6 @@ FLAGS = flags.FLAGS
 
 
 class GloVe(object):
-
     def __init__(self, options, session):
         self._save_path = options.save_path
         self._train_data = options.train_data
@@ -35,8 +34,33 @@ class GloVe(object):
         self._learning_rate = options.learning_rate
         self._batch_size = options.batch_size
         self._concurrent_steps = options.concurrent_steps
-
+        self._vocab_size = 0
         self._session = session
+
+    def forward(self,target,context):
+
+        #emb [vocab_size,emb_dim]
+        emb = tf.Variable(
+            tf.random_uniform(
+                [self._vocab_size, self._embedding_size], -0.5/self._embedding_size, 0.5/self._embedding_size),
+            name="emb")
+
+    def generate_batch(self, i):
+        target = []
+        context = []
+        label = []
+        with open(self._train_data, "r") as f:
+            for _ in xrange(0, i * self._batch_size):
+                next(f)
+            for _ in xrange(i * self._batch_size, (i + 1) * self._batch_size):
+                line = f.readline()
+                if not line:
+                    break
+                line = line.split()
+                target.append(int(line[0]))
+                context.append(int(line[1]))
+                label.append(int(line[2]))
+        return target, context, label
 
 
 def main(_):

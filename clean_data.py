@@ -106,7 +106,7 @@ class CleanData(object):
                 for j in range(0, self._vocab_size):
                     key = str(i) + "-" + str(j)
                     if key in cooccur_matrix:
-                        f.write("%d %d %d\n" % (i, j, cooccur_matrix[key]))
+                        output.write("%d %d %d\n" % (i, j, cooccur_matrix[key]))
 
             print("Save cooccur matrix into %s" % (os.path.join(self._save_path, "cooccur_matrix.txt")))
 
