@@ -101,15 +101,14 @@ class CleanData(object):
                 line_number += 1
 
         print("Finish processed files")
-        with open(os.path.join(self._save_path, "cooccur_matrix.npy"), "w") as output:
-            np.save(output, cooccur_matrix)
+        with open(os.path.join(self._save_path, "cooccur_matrix.txt"), "w") as output:
             for i in range(0, self._vocab_size):
                 for j in range(0, self._vocab_size):
                     key = str(i) + "-" + str(j)
                     if key in cooccur_matrix:
                         f.write("%d %d %d\n" % (i, j, cooccur_matrix[key]))
 
-            print("Save cooccur matrix into %s" % (os.path.join(self._save_path, "cooccur_matrix.npy")))
+            print("Save cooccur matrix into %s" % (os.path.join(self._save_path, "cooccur_matrix.txt")))
 
     def clean(self):
         self.build_dataset()
