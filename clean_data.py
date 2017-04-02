@@ -108,7 +108,7 @@ class CleanData(object):
                     key = str(i) + "-" + str(j)
                     if key in cooccur_matrix:
                         if line_number % 10000 == 0:
-                            print("Saved %d lines", % line_number)
+                            print("Saved %d lines" % line_number)
                             line_number += 1
                             output.write("%d %d %d\n" % (i, j, cooccur_matrix[key]))
 
