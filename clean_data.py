@@ -114,7 +114,7 @@ class CleanData(object):
                         if line_number % 10000 == 0:
                             print("Saved %d lines" % line_number)
 
-        print("Save cooccur matrix into %s" % (os.path.join(self._save_path, "cooccur_matrix.tfrecords")))
+        print("Save cooccur matrix of size %d into %s" % (line_number , os.path.join(self._save_path, "cooccur_matrix.tfrecords")))
 
     def build_cooccur(self):
         cooccur_matrix = dict()
