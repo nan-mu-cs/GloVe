@@ -101,20 +101,23 @@ class CleanData(object):
                 line_number += 1
 
         print("Finish processed files")
+        line_number = 0
         with open(os.path.join(self._save_path, "cooccur_matrix.txt"), "w") as output:
             for i in xrange(self._vocab_size):
                 for j in xrange(self._vocab_size):
                     key = str(i) + "-" + str(j)
                     if key in cooccur_matrix:
-                        output.write("%d %d %d\n" % (i, j, cooccur_matrix[key]))
+                        if line_number % 10000 == 0:
+                            print("Saved %d lines", % line_number)
+                            line_number += 1
+                            output.write("%d %d %d\n" % (i, j, cooccur_matrix[key]))
 
-        print("Save cooccur matrix into %s" % (os.path.join(self._save_path, "cooccur_matrix.txt")))
+            print("Save cooccur matrix into %s" % (os.path.join(self._save_path, "cooccur_matrix.txt")))
 
-    def clean(self):
-        self.build_dataset()
-        self.build_cooccur()
+        def clean(self):
+            self.build_dataset()
+            self.build_cooccur()
 
-
-if __name__ == "__main__":
-    clean_data = CleanData(args)
-    clean_data.clean()
+    if __name__ == "__main__":
+        clean_data = CleanData(args)
+        clean_data.clean()
