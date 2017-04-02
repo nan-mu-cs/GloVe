@@ -22,6 +22,8 @@ flags.DEFINE_integer("batch_size", 16,
                      "(size of a minibatch).")
 flags.DEFINE_integer("concurrent_steps", 12,
                      "The number of concurrent training steps.")
+flags.DEFINE_integer("vocab_size", None, "The vocab size.")
+flags.DEFINE_integer("matrix_size", None, "Matrix Size.")
 
 FLAGS = flags.FLAGS
 
@@ -35,8 +37,8 @@ class GloVe(object):
         self._batch_size = options.batch_size
         self._concurrent_steps = options.concurrent_steps
         self._learning_rate = options.learning_rate
-        self._vocab_size = 0
-        self._num_lines = 1
+        self._vocab_size = options.vocab_size
+        self._num_lines = options.matrix_size
         self._batch_per_epoch = self._num_lines / self._batch_size
         self._x_max = 100
         self._alpha = 0.75
@@ -44,42 +46,52 @@ class GloVe(object):
         self.build_train_graph()
         self.saver = tf.train.Saver()
 
-
     def build_train_graph(self):
 
-        target = tf.placeholder(tf.int32,shape=[self._batch_size])
-        context = tf.placeholder(tf.int32,shape=[self._batch_size])
-        label = tf.placeholder(tf.int32,shape=[self._batch_size,1])
-        # emb_w [vocab_size,emb_dim]
+        self.target = tf.placeholder(tf.int32, shape=[self._batch_size], name="target")
+        self.context = tf.placeholder(tf.int32, shape=[self._batch_size], name="context")
+        self.label = tf.placeholder(tf.float32, shape=[self._batch_size], name="label")
+        alpha = tf.constant(self._alpha, dtype=tf.float32)
+        x_max = tf.constant(self._x_max, dtype=tf.float32)
+
+        # target_emb_w [vocab_size,emb_dim]
         target_emb_w = tf.Variable(
             tf.random_uniform(
                 [self._vocab_size, self._embedding_size], -0.5 / self._embedding_size, 0.5 / self._embedding_size),
             name="target_emb_w")
 
+        # context_emb_w [vocab_size,emb_dim]
         context_emb_w = tf.Variable(
             tf.random_uniform(
                 [self._vocab_size, self._embedding_size], -0.5 / self._embedding_size, 0.5 / self._embedding_size),
             name="context_emb_w")
 
+        # target_emb_b [vocab_size]
         target_emb_b = tf.Variable(tf.zeros([self._vocab_size]), name="target_emb_w")
+        # context_emb_b [vocab_size]
         context_emb_b = tf.Variable(tf.zeros([self._vocab_size]), name="context_emb_w")
 
-        target_w = tf.nn.embedding_lookup(target_emb_w, target)
-        context_w = tf.nn.embedding_lookup(context_emb_w, context)
+        # target_w [batch_size,emb_size]
+        target_w = tf.nn.embedding_lookup(target_emb_w, self.target)
+        # context_w [batch_size,emb_size]
+        context_w = tf.nn.embedding_lookup(context_emb_w, self.context)
 
-        target_b = tf.nn.embedding_lookup(target_emb_b, target)
-        context_b = tf.nn.embedding_lookup(context_emb_b, context)
+        # target_b [batch_size]
+        target_b = tf.nn.embedding_lookup(target_emb_b, self.target)
+        # context_b [bath_size]
+        context_b = tf.nn.embedding_lookup(context_emb_b, self.context)
 
-        diff = tf.matmul(target_w, context_w, transpose_b=True) - target_b - context_b - label
-        fdiff = tf.minium(
-            diff,
-            tf.pow(label / self._x_max, self._alpha) * diff
+        diff = tf.square(
+            tf.reduce_sum(tf.multiply(target_w, context_w), axis=1) - target_b - context_b - tf.log(self.label)
         )
-        loss = diff * fdiff
 
-        if np.isnan(loss):
-            print("current loss IS NaN. This should never happen :)")
-            sys.exit(1)
+        fdiff = tf.minimum(
+            diff,
+            tf.pow(self.label / x_max, alpha) * diff
+        )
+
+        loss = tf.reduce_mean(tf.multiply(diff, fdiff))
+
         self._loss = loss
 
         self.global_step = tf.Variable(0, name="global_step")
@@ -87,20 +99,23 @@ class GloVe(object):
         self._optimizer = tf.train.AdagradOptimizer(self._learning_rate).minimize(loss, global_step=self.global_step)
 
     def generate_batch(self, i):
-        target = []
-        context = []
-        label = []
+        target = np.ndarray(shape=self._batch_size, dtype=np.int32)
+        context = np.ndarray(shape=self._batch_size, dtype=np.int32)
+        label = np.ndarray(shape=self._batch_size, dtype=np.int32)
         with open(self._train_data, "r") as f:
             for _ in xrange(0, i * self._batch_size):
-                next(f)
+                f.readline()
+            line_index = 0
             for _ in xrange(i * self._batch_size, (i + 1) * self._batch_size):
                 line = f.readline()
+
                 if not line:
                     break
                 line = line.split()
-                target.append(int(line[0]))
-                context.append(int(line[1]))
-                label.append(int(line[2]))
+                target[line_index] = int(line[0])
+                context[line_index] = int(line[1])
+                label[line_index] = int(line[2])
+                line_index += 1
         return target, context, label
 
     def init(self):
@@ -110,16 +125,21 @@ class GloVe(object):
     def run(self):
         average_loss = 0
         for step in xrange(self._batch_per_epoch):
-            batch_target,batch_context,batch_label = self.generate_batch(step)
-            feed_dict = {target: batch_target,context: batch_context,label:batch_label}
+            batch_target, batch_context, batch_label = self.generate_batch(step)
+            feed_dict = {self.target: batch_target, self.context: batch_context, self.label: batch_label}
             _, loss_val = self._session.run([self._optimizer, self._loss], feed_dict=feed_dict)
+            if np.isnan(loss_val):
+                print("current loss IS NaN. This should never happen :)")
+                sys.exit(1)
+
             average_loss += loss_val
-            if step % 2000 == 0:
+            if step % 200 == 0:
                 if step > 0:
-                    average_loss /= 2000
+                    average_loss /= 200
                 # The average loss is an estimate of the loss over the last 2000 batches.
-                print('Average loss at step ', step, ': ', average_loss)
+                print('Step: %d Avg_loss: %f' % (step, average_loss))
                 average_loss = 0
+
 
 def main(_):
     if not FLAGS.save_path or not FLAGS.train_data:
@@ -138,6 +158,7 @@ def main(_):
         model.saver.save(session,
                          os.path.join(FLAGS.save_path, "model.ckpt"),
                          global_step=model.global_step)
+
 
 if __name__ == "__main__":
     tf.app.run()
