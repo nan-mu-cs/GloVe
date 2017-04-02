@@ -96,8 +96,8 @@ class CleanData(object):
                         cooccur_matrix[key] += 1
                     else:
                         cooccur_matrix[key] = 1
-                if (line_number + 1) % 1000 == 0:
-                    print("Processed %d lines" % (line_number + 1))
+                if line_number % 1000 == 0:
+                    print("Processed %d lines" % line_number)
                 line_number += 1
 
         print("Finish processed files")
@@ -107,12 +107,13 @@ class CleanData(object):
                 for j in xrange(self._vocab_size):
                     key = str(i) + "-" + str(j)
                     if key in cooccur_matrix:
+                        line_number += 1
+                        output.write("%d %d %d\n" % (i, j, cooccur_matrix[key]))
                         if line_number % 10000 == 0:
                             print("Saved %d lines" % line_number)
-                            line_number += 1
-                            output.write("%d %d %d\n" % (i, j, cooccur_matrix[key]))
 
-            print("Save cooccur matrix into %s" % (os.path.join(self._save_path, "cooccur_matrix.txt")))
+
+        print("Save cooccur matrix into %s" % (os.path.join(self._save_path, "cooccur_matrix.txt")))
 
     def clean(self):
         self.build_dataset()
