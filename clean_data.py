@@ -60,7 +60,8 @@ class CleanData(object):
         self.reverse_dictionary = dict(zip(self.dictionary.values(), self.dictionary.keys()))
 
         with open(os.path.join(self._save_path, "vocab.txt"), "w") as f:
-            f.write(json.dumps(data))
+            for key in data:
+                f.write("%s %d\n" % (key, data[key]))
             print("Write vocab into %s." % os.path.join(self._save_path, "vocab.txt"))
         return data
 
@@ -112,12 +113,12 @@ class CleanData(object):
                         if line_number % 10000 == 0:
                             print("Saved %d lines" % line_number)
 
-
         print("Save cooccur matrix into %s" % (os.path.join(self._save_path, "cooccur_matrix.txt")))
 
     def clean(self):
         self.build_dataset()
         self.build_cooccur()
+
 
 if __name__ == "__main__":
     clean_data = CleanData(args)
