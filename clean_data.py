@@ -114,10 +114,10 @@ class CleanData(object):
 
             print("Save cooccur matrix into %s" % (os.path.join(self._save_path, "cooccur_matrix.txt")))
 
-        def clean(self):
-            self.build_dataset()
-            self.build_cooccur()
+    def clean(self):
+        self.build_dataset()
+        self.build_cooccur()
 
-    if __name__ == "__main__":
-        clean_data = CleanData(args)
-        clean_data.clean()
+if __name__ == "__main__":
+    clean_data = CleanData(args)
+    clean_data.clean()
