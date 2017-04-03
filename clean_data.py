@@ -1,3 +1,4 @@
+import tensorflow as tf
 import numpy as np
 import collections
 import argparse
@@ -82,8 +83,38 @@ class CleanData(object):
                     continue
         return result
 
-    def build_cooccur(self):
+    def save_as_csv(self, cooccur_matrix):
         line_number = 0
+        with open(os.path.join(self._save_path, "cooccur_matrix.csv"), "w") as output:
+            for i in xrange(self._vocab_size):
+                for j in xrange(self._vocab_size):
+                    key = str(i) + "-" + str(j)
+                    if key in cooccur_matrix:
+                        line_number += 1
+                        output.write("%d,%d,%d\n" % (i, j, cooccur_matrix[key]))
+                        if line_number % 10000 == 0:
+                            print("Saved %d lines" % line_number)
+
+        print("Save cooccur matrix into %s" % (os.path.join(self._save_path, "cooccur_matrix.csv")))
+
+    def save_as_tfrecord(self, cooccur_matrix):
+        with tf.python_io.TFRecordWriter(os.path.join(self._save_path, "cooccur_matrix.tfrecords"), "w") as output:
+            for i in xrange(self._vocab_size):
+                for j in xrange(self._vocab_size):
+                    key = str(i) + "-" + str(j)
+                    if key in cooccur_matrix:
+                        line_number += 1
+                        example = tf.train.Example(features=tf.train.Features(feature={
+                            'target': _int64_feature(i),
+                            'context': _int64_feature(j),
+                            'label': _int64_feature(cooccur_matrix[key])}))
+                        writer.write(example.SerializeToString())
+                        if line_number % 10000 == 0:
+                            print("Saved %d lines" % line_number)
+
+        print("Save cooccur matrix into %s" % (os.path.join(self._save_path, "cooccur_matrix.tfrecords")))
+
+    def build_cooccur(self):
         cooccur_matrix = dict()
         with open(self._data_file, "r") as f:
             while True:
@@ -102,18 +133,7 @@ class CleanData(object):
                 line_number += 1
 
         print("Finish processed files")
-        line_number = 0
-        with open(os.path.join(self._save_path, "cooccur_matrix.txt"), "w") as output:
-            for i in xrange(self._vocab_size):
-                for j in xrange(self._vocab_size):
-                    key = str(i) + "-" + str(j)
-                    if key in cooccur_matrix:
-                        line_number += 1
-                        output.write("%d %d %d\n" % (i, j, cooccur_matrix[key]))
-                        if line_number % 10000 == 0:
-                            print("Saved %d lines" % line_number)
-
-        print("Save cooccur matrix into %s" % (os.path.join(self._save_path, "cooccur_matrix.txt")))
+        self.save_as_csv(cooccur_matrix)
 
     def clean(self):
         self.build_dataset()

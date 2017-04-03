@@ -120,14 +120,20 @@ class GloVe(object):
 
     def read_data(self):
         filename_queue = tf.train.string_input_producer([self._train_data])
-        reader = tf.TextLineReader()
-        key, value = reader.read(filename_queue)
-        record_defaults = [[0], [0], [0.0]]
-        data = tf.decode_csv(value, record_defaults=record_defaults,field_delim=" ")
+        reader = tf.TFRecordReader()
+        _, serialized_example = reader.read(filename_queue)
+        features = tf.parse_single_example(
+            serialized_example,
+            # Defaults are not specified since both keys are required.
+            features={
+                'target': tf.FixedLenFeature([], tf.int64),
+                'context': tf.FixedLenFeature([], tf.int64),
+                'label': tf.FixedLenFeature([], tf.int64),
+            })
 
-        target = data[0]
-        context = data[1]
-        label = data[2]
+        target = features['target']
+        context = features['context']
+        label = data['label']
         min_after_dequeue = 10000
         capacity = min_after_dequeue + 3 * self._batch_size
         target_batch, context_batch, label_batch = tf.train.shuffle_batch(
@@ -146,6 +152,7 @@ class GloVe(object):
         average_loss = 0
         coord = tf.train.Coordinator()
         threads = tf.train.start_queue_runners(coord=coord)
+
         for step in xrange(self._batch_per_epoch):
             #batch_target, batch_context, batch_label = self.read_data()
             #feed_dict = {self.target: batch_target, self.context: batch_context, self.label: batch_label}
@@ -172,6 +179,7 @@ def main(_):
         sys.exit(1)
 
     with tf.Graph().as_default(), tf.Session() as session:
+        model = GloVe(FLAGS, session)
         model = GloVe(FLAGS, session)
         model.init()
         for epoch in xrange(FLAGS.epochs_to_train):
