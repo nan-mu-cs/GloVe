@@ -82,12 +82,12 @@ class GloVe(object):
         context_b = tf.nn.embedding_lookup(context_emb_b, self.context)
 
         diff = tf.square(
-            tf.reduce_sum(tf.multiply(target_w, context_w), axis=1) - target_b - context_b - tf.log(self.label)
+            tf.reduce_sum(tf.multiply(target_w, context_w), axis=1) - target_b - context_b - tf.log(tf.cast(self.label,tf.float32))
         )
 
         fdiff = tf.minimum(
             diff,
-            tf.pow(self.label / x_max, alpha) * diff
+            tf.pow(tf.cast(self.label,tf.float32) / x_max, alpha) * diff
         )
 
         loss = tf.reduce_mean(tf.multiply(diff, fdiff))
@@ -117,6 +117,23 @@ class GloVe(object):
                 label[line_index] = int(line[2])
                 line_index += 1
         return target, context, label
+
+    def read_data_from_csv(self):
+        filename_queue = tf.train.string_input_producer([self._train_data])
+        reader = tf.TextLineReader()
+        key, value = reader.read(filename_queue)
+        record_defaults = [[0], [0], [0.0]]
+        data = tf.decode_csv(value, record_defaults=record_defaults)
+
+        target = data[0]
+        context = data[1]
+        label = data[2]
+        min_after_dequeue = 10000
+        capacity = min_after_dequeue + 3 * self._batch_size
+        target_batch, context_batch, label_batch = tf.train.shuffle_batch(
+            [target, context, label], batch_size=self._batch_size, capacity=capacity,
+            min_after_dequeue=min_after_dequeue)
+        return target_batch, context_batch, label_batch
 
     def read_data(self):
         filename_queue = tf.train.string_input_producer([self._train_data], num_epochs=self._num_epochs)
