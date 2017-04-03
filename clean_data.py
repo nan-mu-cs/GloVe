@@ -116,6 +116,7 @@ class CleanData(object):
 
     def build_cooccur(self):
         cooccur_matrix = dict()
+        line_number = 0
         with open(self._data_file, "r") as f:
             while True:
                 line = f.readline()
