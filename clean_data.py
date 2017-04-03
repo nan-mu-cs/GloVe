@@ -134,7 +134,7 @@ class CleanData(object):
                 line_number += 1
 
         print("Finish processed files")
-        self.save_as_csv(cooccur_matrix)
+        self.save_as_tfrecord(cooccur_matrix)
 
     def clean(self):
         self.build_dataset()

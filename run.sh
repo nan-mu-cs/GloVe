@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 
 SAVE_PATH=./data/
-TRAIN_DATA=./data/cooccur_matrix.txt
+TRAIN_DATA=./data/cooccur_matrix.tfrecord
 EMBEDDING_SIZE=200
 EPOCHS=15
 LEARNING_RATE=0.05
-BATCH_SIZE=500
+BATCH_SIZE=5000
 VOCAB_SIZE=18497
 MATRIX_SIZE=17724348
 
