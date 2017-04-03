@@ -39,7 +39,7 @@ class GloVe(object):
         self._learning_rate = options.learning_rate
         self._vocab_size = options.vocab_size
         self._num_lines = options.matrix_size
-        self._batch_per_epoch = self._num_lines / self._batch_size
+        self._num_epochs = options.epochs_to_train
         self._x_max = 100
         self._alpha = 0.75
         self._session = session
@@ -119,7 +119,7 @@ class GloVe(object):
         return target, context, label
 
     def read_data(self):
-        filename_queue = tf.train.string_input_producer([self._train_data])
+        filename_queue = tf.train.string_input_producer([self._train_data], num_epochs=self._num_epochs)
         reader = tf.TFRecordReader()
         _, serialized_example = reader.read(filename_queue)
         features = tf.parse_single_example(
@@ -133,16 +133,16 @@ class GloVe(object):
 
         target = features['target']
         context = features['context']
-        label = data['label']
+        label = features['label']
         min_after_dequeue = 10000
         capacity = min_after_dequeue + 3 * self._batch_size
         target_batch, context_batch, label_batch = tf.train.shuffle_batch(
             [target, context, label], batch_size=self._batch_size, capacity=capacity,
-            min_after_dequeue=min_after_dequeue)
+            min_after_dequeue=min_after_dequeue, num_threads=self._concurrent_steps)
         return target_batch, context_batch, label_batch
 
     def init(self):
-        #self.target, self.context, self.label = self.read_data()
+        # self.target, self.context, self.label = self.read_data()
         init_op = tf.group(tf.global_variables_initializer(),
                            tf.local_variables_initializer())
         self._session.run(init_op)
@@ -151,24 +151,38 @@ class GloVe(object):
     def run(self):
         average_loss = 0
         coord = tf.train.Coordinator()
-        threads = tf.train.start_queue_runners(coord=coord)
+        threads = tf.train.start_queue_runners(sess=self._session, coord=coord)
 
-        for step in xrange(self._batch_per_epoch):
-            #batch_target, batch_context, batch_label = self.read_data()
-            #feed_dict = {self.target: batch_target, self.context: batch_context, self.label: batch_label}
-            _, loss_val = self._session.run(
-                [self._optimizer, self._loss])
-            if np.isnan(loss_val):
-                print("current loss IS NaN. This should never happen :)")
-                sys.exit(1)
+        try:
+            step = 0
+            while not coord.should_stop():
+                start_time = time.time()
 
-            average_loss += loss_val
-            if step % 200 == 0:
-                if step > 0:
-                    average_loss /= 200
-                # The average loss is an estimate of the loss over the last 2000 batches.
-                print('Step: %d Avg_loss: %f' % (step, average_loss))
-                average_loss = 0
+                _, loss_val = self._session.run(
+                    [self._optimizer, self._loss])
+                if np.isnan(loss_val):
+                    print("current loss IS NaN. This should never happen :)")
+                    sys.exit(1)
+
+                duration = time.time() - start_time
+
+                average_loss += loss_val
+                if step % 200 == 0:
+                    if step > 0:
+                        average_loss /= 200
+                        # The average loss is an estimate of the loss over the last 2000 batches.
+                        print('Step: %d Avg_loss: %f (%.3f sec)' % (step, average_loss, duration))
+                        average_loss = 0
+                if step % 5000 == 0:
+                    if step > 0:
+                        self.saver.save(self._session, os.path.join(self._save_path, "model.ckpt"), global_step=step)
+                step += 1
+        except tf.errors.OutOfRangeError:
+            print('Done training for %d epochs, %d steps.' % (self._num_epochs, step))
+        finally:
+            # When done, ask the threads to stop.
+            coord.request_stop()
+
         coord.request_stop()
         coord.join(threads)
 
@@ -180,18 +194,8 @@ def main(_):
 
     with tf.Graph().as_default(), tf.Session() as session:
         model = GloVe(FLAGS, session)
-        model = GloVe(FLAGS, session)
         model.init()
-        for epoch in xrange(FLAGS.epochs_to_train):
-            model.run()
-
-            if (epoch + 1) % 10 == 0:
-                model.saver.save(session,
-                                 os.path.join(FLAGS.save_path, "model.ckpt"),
-                                 global_step=model.global_step)
-        model.saver.save(session,
-                         os.path.join(FLAGS.save_path, "model.ckpt"),
-                         global_step=model.global_step)
+        model.run()
 
 
 if __name__ == "__main__":
