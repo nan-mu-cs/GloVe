@@ -5,6 +5,7 @@ import os
 import sys
 import threading
 import time
+from tensorflow.python.client import timeline
 
 flags = tf.app.flags
 
@@ -24,7 +25,7 @@ flags.DEFINE_integer("concurrent_steps", 12,
                      "The number of concurrent training steps.")
 flags.DEFINE_integer("vocab_size", None, "The vocab size.")
 flags.DEFINE_integer("matrix_size", None, "Matrix Size.")
-
+flags.DEFINE_integer("load_data_per_time",100,"load number of lines per read")
 FLAGS = flags.FLAGS
 
 
@@ -40,6 +41,7 @@ class GloVe(object):
         self._vocab_size = options.vocab_size
         self._num_lines = options.matrix_size
         self._num_epochs = options.epochs_to_train
+        self._load_data_per_time = options.load_data_per_time
         self._x_max = 100
         self._alpha = 0.75
         self._session = session
@@ -47,7 +49,7 @@ class GloVe(object):
         self.saver = tf.train.Saver()
 
     def build_train_graph(self):
-        self.target, self.context, self.label = self.read_data()
+        self.target, self.context, self.label = self.read_data_from_csv()
         # self.target = tf.placeholder(tf.int32, shape=[self._batch_size], name="target")
         # self.context = tf.placeholder(tf.int32, shape=[self._batch_size], name="context")
         # self.label = tf.placeholder(tf.float32, shape=[self._batch_size], name="label")
@@ -82,12 +84,13 @@ class GloVe(object):
         context_b = tf.nn.embedding_lookup(context_emb_b, self.context)
 
         diff = tf.square(
-            tf.reduce_sum(tf.multiply(target_w, context_w), axis=1) - target_b - context_b - tf.log(tf.cast(self.label,tf.float32))
+            tf.reduce_sum(tf.multiply(target_w, context_w), axis=1) - target_b - context_b - tf.log(
+                tf.cast(self.label, tf.float32))
         )
 
         fdiff = tf.minimum(
             diff,
-            tf.pow(tf.cast(self.label,tf.float32) / x_max, alpha) * diff
+            tf.pow(tf.cast(self.label, tf.float32) / x_max, alpha) * diff
         )
 
         loss = tf.reduce_mean(tf.multiply(diff, fdiff))
@@ -121,47 +124,49 @@ class GloVe(object):
     def read_data_from_csv(self):
         filename_queue = tf.train.string_input_producer([self._train_data])
         reader = tf.TextLineReader()
-        key, value = reader.read(filename_queue)
+        key, value = reader.read_up_to(filename_queue,num_records=self._batch_size)
         record_defaults = [[0], [0], [0.0]]
         data = tf.decode_csv(value, record_defaults=record_defaults)
-
         target = data[0]
         context = data[1]
         label = data[2]
+        # return target,context,label
         min_after_dequeue = 10000
         capacity = min_after_dequeue + 3 * self._batch_size
         target_batch, context_batch, label_batch = tf.train.shuffle_batch(
-            [target, context, label], batch_size=self._batch_size, capacity=capacity,
+            [target, context, label], batch_size=self._batch_size, capacity=capacity,enqueue_many=True,
             min_after_dequeue=min_after_dequeue)
         return target_batch, context_batch, label_batch
 
     def read_data(self):
         filename_queue = tf.train.string_input_producer([self._train_data], num_epochs=self._num_epochs)
         reader = tf.TFRecordReader()
-        _, serialized_example = reader.read(filename_queue)
-        features = tf.parse_single_example(
+        _, serialized_example = reader.read_up_to(filename_queue,self._batch_size)
+        features = tf.parse_example(
             serialized_example,
             # Defaults are not specified since both keys are required.
             features={
-                'target': tf.FixedLenFeature([], tf.int64),
-                'context': tf.FixedLenFeature([], tf.int64),
-                'label': tf.FixedLenFeature([], tf.int64),
+                'target': tf.FixedLenFeature([], dtype=tf.int64),
+                'context': tf.FixedLenFeature([], dtype=tf.int64),
+                'label': tf.FixedLenFeature([], dtype=tf.int64)
             })
 
         target = features['target']
         context = features['context']
         label = features['label']
+
         min_after_dequeue = 10000
         capacity = min_after_dequeue + 3 * self._batch_size
         target_batch, context_batch, label_batch = tf.train.shuffle_batch(
             [target, context, label], batch_size=self._batch_size, capacity=capacity,
-            min_after_dequeue=min_after_dequeue, num_threads=self._concurrent_steps)
+            min_after_dequeue=min_after_dequeue, num_threads=self._concurrent_steps,enqueue_many=True)
         return target_batch, context_batch, label_batch
 
     def init(self):
         # self.target, self.context, self.label = self.read_data()
         init_op = tf.group(tf.global_variables_initializer(),
                            tf.local_variables_initializer())
+
         self._session.run(init_op)
         print('Initialized')
 
@@ -169,14 +174,15 @@ class GloVe(object):
         average_loss = 0
         coord = tf.train.Coordinator()
         threads = tf.train.start_queue_runners(sess=self._session, coord=coord)
-
+        options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
+        run_metadata = tf.RunMetadata()
         try:
             step = 0
             while not coord.should_stop():
                 start_time = time.time()
 
                 _, loss_val = self._session.run(
-                    [self._optimizer, self._loss])
+                    [self._optimizer, self._loss], options=options, run_metadata=run_metadata)
                 if np.isnan(loss_val):
                     print("current loss IS NaN. This should never happen :)")
                     sys.exit(1)
@@ -187,6 +193,10 @@ class GloVe(object):
                 if step % 200 == 0:
                     if step > 0:
                         average_loss /= 200
+                        fetched_timeline = timeline.Timeline(run_metadata.step_stats)
+                        chrome_trace = fetched_timeline.generate_chrome_trace_format()
+                        with open('timeline_09.json', 'w') as f:
+                            f.write(chrome_trace)
                         # The average loss is an estimate of the loss over the last 2000 batches.
                         print('Step: %d Avg_loss: %f (%.3f sec)' % (step, average_loss, duration))
                         average_loss = 0
