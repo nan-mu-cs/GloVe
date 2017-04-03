@@ -47,10 +47,10 @@ class GloVe(object):
         self.saver = tf.train.Saver()
 
     def build_train_graph(self):
-
-        self.target = tf.placeholder(tf.int32, shape=[self._batch_size], name="target")
-        self.context = tf.placeholder(tf.int32, shape=[self._batch_size], name="context")
-        self.label = tf.placeholder(tf.float32, shape=[self._batch_size], name="label")
+        self.target, self.context, self.label = self.read_data()
+        # self.target = tf.placeholder(tf.int32, shape=[self._batch_size], name="target")
+        # self.context = tf.placeholder(tf.int32, shape=[self._batch_size], name="context")
+        # self.label = tf.placeholder(tf.float32, shape=[self._batch_size], name="label")
         alpha = tf.constant(self._alpha, dtype=tf.float32)
         x_max = tf.constant(self._x_max, dtype=tf.float32)
 
@@ -118,16 +118,39 @@ class GloVe(object):
                 line_index += 1
         return target, context, label
 
+    def read_data(self):
+        filename_queue = tf.train.string_input_producer([self._train_data])
+        reader = tf.TextLineReader()
+        key, value = reader.read(filename_queue)
+        record_defaults = [[0], [0], [0.0]]
+        data = tf.decode_csv(value, record_defaults=record_defaults,field_delim=" ")
+
+        target = data[0]
+        context = data[1]
+        label = data[2]
+        min_after_dequeue = 10000
+        capacity = min_after_dequeue + 3 * self._batch_size
+        target_batch, context_batch, label_batch = tf.train.shuffle_batch(
+            [target, context, label], batch_size=self._batch_size, capacity=capacity,
+            min_after_dequeue=min_after_dequeue)
+        return target_batch, context_batch, label_batch
+
     def init(self):
-        tf.global_variables_initializer().run()
+        #self.target, self.context, self.label = self.read_data()
+        init_op = tf.group(tf.global_variables_initializer(),
+                           tf.local_variables_initializer())
+        self._session.run(init_op)
         print('Initialized')
 
     def run(self):
         average_loss = 0
+        coord = tf.train.Coordinator()
+        threads = tf.train.start_queue_runners(coord=coord)
         for step in xrange(self._batch_per_epoch):
-            batch_target, batch_context, batch_label = self.generate_batch(step)
-            feed_dict = {self.target: batch_target, self.context: batch_context, self.label: batch_label}
-            _, loss_val = self._session.run([self._optimizer, self._loss], feed_dict=feed_dict)
+            #batch_target, batch_context, batch_label = self.read_data()
+            #feed_dict = {self.target: batch_target, self.context: batch_context, self.label: batch_label}
+            _, loss_val = self._session.run(
+                [self._optimizer, self._loss])
             if np.isnan(loss_val):
                 print("current loss IS NaN. This should never happen :)")
                 sys.exit(1)
@@ -139,6 +162,8 @@ class GloVe(object):
                 # The average loss is an estimate of the loss over the last 2000 batches.
                 print('Step: %d Avg_loss: %f' % (step, average_loss))
                 average_loss = 0
+        coord.request_stop()
+        coord.join(threads)
 
 
 def main(_):
@@ -151,6 +176,7 @@ def main(_):
         model.init()
         for epoch in xrange(FLAGS.epochs_to_train):
             model.run()
+
             if (epoch + 1) % 10 == 0:
                 model.saver.save(session,
                                  os.path.join(FLAGS.save_path, "model.ckpt"),
