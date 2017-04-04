@@ -61,8 +61,8 @@ class CleanData(object):
         self.reverse_dictionary = dict(zip(self.dictionary.values(), self.dictionary.keys()))
 
         with open(os.path.join(self._save_path, "vocab.txt"), "w") as f:
-            for key, value in data:
-                f.write("%s %d\n" % (key, value))
+            for key in self.dictionary:
+                f.write("%s %d\n" % (key, self.dictionary[key]))
             print("Write vocab into %s." % os.path.join(self._save_path, "vocab.txt"))
         return data
 
