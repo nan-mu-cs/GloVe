@@ -1,3 +1,7 @@
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
 import tensorflow as tf
 import numpy as np
 
@@ -341,7 +345,8 @@ class GloVe(object):
                         # with open('timeline_09.json', 'w') as f:
                         #     f.write(chrome_trace)
                         # The average loss is an estimate of the loss over the last 2000 batches.
-                        print('Step: %d Avg_loss: %f (%.3f sec)' % (step, average_loss, duration))
+                        print('Step: %d Avg_loss: %f (%.3f sec)\r' % (step, average_loss, duration),end="")
+                        sys.stdout.flush()
                         average_loss = 0
                 if step % 100000 == 0:
                     if step > 0:
