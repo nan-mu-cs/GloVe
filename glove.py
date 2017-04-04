@@ -315,15 +315,17 @@ class GloVe(object):
         average_loss = 0
         coord = tf.train.Coordinator()
         threads = tf.train.start_queue_runners(sess=self._session, coord=coord)
-        options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
-        run_metadata = tf.RunMetadata()
+        # options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
+        # run_metadata = tf.RunMetadata()
         try:
             step = 0
             while not coord.should_stop():
                 start_time = time.time()
 
                 _, loss_val = self._session.run(
-                    [self._optimizer, self._loss], options=options, run_metadata=run_metadata)
+                    [self._optimizer, self._loss]
+                #    , options=options, run_metadata=run_metadata
+                )
                 if np.isnan(loss_val):
                     print("current loss IS NaN. This should never happen :)")
                     sys.exit(1)
@@ -334,10 +336,10 @@ class GloVe(object):
                 if step % 200 == 0:
                     if step > 0:
                         average_loss /= 200
-                        fetched_timeline = timeline.Timeline(run_metadata.step_stats)
-                        chrome_trace = fetched_timeline.generate_chrome_trace_format()
-                        with open('timeline_09.json', 'w') as f:
-                            f.write(chrome_trace)
+                        #fetched_timeline = timeline.Timeline(run_metadata.step_stats)
+                        #chrome_trace = fetched_timeline.generate_chrome_trace_format()
+                        # with open('timeline_09.json', 'w') as f:
+                        #     f.write(chrome_trace)
                         # The average loss is an estimate of the loss over the last 2000 batches.
                         print('Step: %d Avg_loss: %f (%.3f sec)' % (step, average_loss, duration))
                         average_loss = 0
