@@ -153,6 +153,7 @@ class GloVe(object):
 
         self.global_step = tf.Variable(0, name="global_step")
 
+
         self._optimizer = tf.train.AdagradOptimizer(self._learning_rate).minimize(loss, global_step=self.global_step)
 
     def build_eval_graph(self):
@@ -329,12 +330,11 @@ class GloVe(object):
         # options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
         # run_metadata = tf.RunMetadata()
         try:
-            step = 0
             while not coord.should_stop():
                 start_time = time.time()
 
-                _, loss_val = self._session.run(
-                    [self._optimizer, self._loss]
+                _, loss_val,step = self._session.run(
+                    [self._optimizer, self._loss, self.global_step]
                     #    , options=options, run_metadata=run_metadata
                 )
                 if np.isnan(loss_val):
@@ -359,7 +359,7 @@ class GloVe(object):
                     if step > 0:
                         self.eval()
                         self.saver.save(self._session, os.path.join(self._save_path, "model.ckpt"), global_step=step)
-                step += 1
+
         except tf.errors.OutOfRangeError:
             print('Done training for %d epochs, %d steps.' % (self._num_epochs, step))
         finally:
