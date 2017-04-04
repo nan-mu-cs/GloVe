@@ -32,6 +32,10 @@ flags.DEFINE_integer("concurrent_steps", 12,
 flags.DEFINE_integer("vocab_size", None, "The vocab size.")
 flags.DEFINE_integer("matrix_size", None, "Matrix Size.")
 flags.DEFINE_integer("load_data_per_time", 100, "load number of lines per read")
+flags.DEFINE_boolean(
+    "restore_model", False,
+    "If true, load model from load path")
+flags.DEFINE_string("load_path", None, "Load model from the path")
 
 FLAGS = flags.FLAGS
 
@@ -50,6 +54,8 @@ class GloVe(object):
         self._num_epochs = options.epochs_to_train
         self._eval_data = options.eval_data
         self._vocab_data = options.vocab_data
+        self._restore_model = options.restore_model
+        self._load_path = options.load_path
         self.dictionary = dict()
         self.reverse_dictionary = dict()
         self._x_max = 100
@@ -166,7 +172,7 @@ class GloVe(object):
 
         # Normalized word embeddings of shape [vocab_size, emb_dim].
         emb = self.target_emb_w + self.context_emb_w
-        #emb = self.target_emb_w
+        # emb = self.target_emb_w
         nemb = tf.nn.l2_normalize(emb, 1)
 
         # Each row of a_emb, b_emb, c_emb is a word's embedding vector.
@@ -308,11 +314,12 @@ class GloVe(object):
         return target_batch, context_batch, label_batch
 
     def init(self):
-        # self.target, self.context, self.label = self.read_data()
-        init_op = tf.group(tf.global_variables_initializer(),
-                           tf.local_variables_initializer())
-
-        self._session.run(init_op)
+        if self._restore_model:
+            self.saver.restore(self._session, self._load_path)
+        else:
+            init_op = tf.group(tf.global_variables_initializer(),
+                               tf.local_variables_initializer())
+            self._session.run(init_op)
         print('Initialized')
 
     def run(self):
@@ -328,7 +335,7 @@ class GloVe(object):
 
                 _, loss_val = self._session.run(
                     [self._optimizer, self._loss]
-                #    , options=options, run_metadata=run_metadata
+                    #    , options=options, run_metadata=run_metadata
                 )
                 if np.isnan(loss_val):
                     print("current loss IS NaN. This should never happen :)")
@@ -340,12 +347,12 @@ class GloVe(object):
                 if step % 200 == 0:
                     if step > 0:
                         average_loss /= 200
-                        #fetched_timeline = timeline.Timeline(run_metadata.step_stats)
-                        #chrome_trace = fetched_timeline.generate_chrome_trace_format()
+                        # fetched_timeline = timeline.Timeline(run_metadata.step_stats)
+                        # chrome_trace = fetched_timeline.generate_chrome_trace_format()
                         # with open('timeline_09.json', 'w') as f:
                         #     f.write(chrome_trace)
                         # The average loss is an estimate of the loss over the last 2000 batches.
-                        print('Step: %d Avg_loss: %f (%.3f sec)\r' % (step, average_loss, duration),end="")
+                        print('Step: %d Avg_loss: %f (%.3f sec)\r' % (step, average_loss, duration), end="")
                         sys.stdout.flush()
                         average_loss = 0
                 if step % 100000 == 0:
@@ -366,6 +373,9 @@ class GloVe(object):
 def main(_):
     if not FLAGS.save_path or not FLAGS.train_data or not FLAGS.eval_data or not FLAGS.vocab_data:
         print("--save_path --train_data --eval_data --vocab_data must be specified.")
+        sys.exit(1)
+    if FLAGS.restore_model and not FLAGS.load_path:
+        print("--load_path must be specified.")
         sys.exit(1)
 
     with tf.Graph().as_default(), tf.Session() as session:
