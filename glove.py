@@ -162,6 +162,7 @@ class GloVe(object):
 
         # Normalized word embeddings of shape [vocab_size, emb_dim].
         emb = self.target_emb_w + self.context_emb_w
+        #emb = self.target_emb_w
         nemb = tf.nn.l2_normalize(emb, 1)
 
         # Each row of a_emb, b_emb, c_emb is a word's embedding vector.
@@ -340,7 +341,7 @@ class GloVe(object):
                         # The average loss is an estimate of the loss over the last 2000 batches.
                         print('Step: %d Avg_loss: %f (%.3f sec)' % (step, average_loss, duration))
                         average_loss = 0
-                if step % 5000 == 0:
+                if step % 100000 == 0:
                     if step > 0:
                         self.eval()
                         self.saver.save(self._session, os.path.join(self._save_path, "model.ckpt"), global_step=step)
