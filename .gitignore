@@ -1,3 +1,8 @@
 /.idea/
 *.sh
-
+./data/checkpoint
+./data/*.csv
+./data/*.tfrecords
+./data/model.*
+./data/vocab.txt
+./data/text8
