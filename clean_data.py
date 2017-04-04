@@ -76,9 +76,12 @@ class CleanData(object):
             else:
                 continue
             for i in range(max(0, index - window), min(len(line), index + window)):
+                if i == index:
+                    continue
+                dist = abs(index - i)
                 if line[i] in self.dictionary:
                     context_index = self.dictionary[line[i]]
-                    result.append((target_index, context_index))
+                    result.append([target_index, context_index, 1.0/dist])
                 else:
                     continue
         return result
@@ -91,7 +94,7 @@ class CleanData(object):
                     key = str(i) + "-" + str(j)
                     if key in cooccur_matrix:
                         line_number += 1
-                        output.write("%d,%d,%d\n" % (i, j, cooccur_matrix[key]))
+                        output.write("%d,%d,%f\n" % (i, j, cooccur_matrix[key]))
                         if line_number % 10000 == 0:
                             print("Saved %d lines" % line_number)
 
@@ -108,7 +111,7 @@ class CleanData(object):
                         example = tf.train.Example(features=tf.train.Features(feature={
                             'target': tf.train.Feature(int64_list=tf.train.Int64List(value=[i])),
                             'context': tf.train.Feature(int64_list=tf.train.Int64List(value=[j])),
-                            'label': tf.train.Feature(int64_list=tf.train.Int64List(value=[cooccur_matrix[key]]))}))
+                            'label': tf.train.Feature(int64_list=tf.train.Float64List(value=[cooccur_matrix[key]]))}))
                         output.write(example.SerializeToString())
                         line_number += 1
                         if line_number % 10000 == 0:
@@ -125,12 +128,12 @@ class CleanData(object):
                 if not line:
                     break
                 line = self.update_coocur_line(line)
-                for target_word, context_word in line:
+                for target_word, context_word, dist in line:
                     key = str(target_word) + "-" + str(context_word)
                     if key in cooccur_matrix:
-                        cooccur_matrix[key] += 1
+                        cooccur_matrix[key] += dist
                     else:
-                        cooccur_matrix[key] = 1
+                        cooccur_matrix[key] = dist
                 if line_number % 1000 == 0:
                     print("Processed %d lines" % line_number)
                 line_number += 1
